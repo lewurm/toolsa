@@ -1,6 +1,6 @@
 #!/usr/bin/python2.7
 
-import sys, struct
+import sys, struct, binascii, os
 from datetime import datetime
 
 filename = sys.argv[1]
@@ -39,6 +39,31 @@ def to_u32 (j):
     # print "to_u32: 0x%x" % (res)
     return res
 
+
+class Block:
+    def __init__(self, buffer, offset):
+        self.buffer = buffer
+        self.offset = offset
+
+    def get_raw(self):
+        return self.buffer[self.offset:self.offset+BLOCK_SIZE]
+
+    def __repr__(self):
+        return "Block[offset={:x}]".format(self.offset)
+ 
+
+BLOCK_SIZE = 0x4000
+blocks = [Block(data, offset) for offset in range(
+    BLOCK_SIZE, # Skip the first block, it appears to have different format
+    len(data),
+    BLOCK_SIZE)]
+
+for block in blocks:
+    raw = bytes(block.get_raw())
+    l, seq = struct.unpack(">HH", raw[:4]) # Guess: First two bytes length; second two bytes some kind of sequence
+    print("{}: 0x{:04x} 0x{:04x} {}".format(os.path.basename(filename), l, seq, binascii.hexlify(raw[4:32])))
+
+sys.exit(0)
 
 hextimestamp = filename [filename.rfind("/") + 1 : -4]
 print "[++] %s is %d bytes long" % (hextimestamp + ".HRL", file_length)
