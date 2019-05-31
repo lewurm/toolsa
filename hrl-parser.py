@@ -60,8 +60,8 @@ blocks = [Block(data, offset) for offset in range(
 
 for block in blocks:
     raw = bytes(block.get_raw())
-    l, seq = struct.unpack(">HH", raw[:4]) # Guess: First two bytes length; second two bytes some kind of sequence
-    print("{}: 0x{:04x} 0x{:04x} {}".format(os.path.basename(filename), l, seq, binascii.hexlify(raw[4:32])))
+    l, seq, x1, x2, x3 = struct.unpack(">BIIHB", raw[:1+4+4+2+1]) # Guess: First two bytes length; second two bytes some kind of sequence
+    print("{}: 0x{:02x} 0x{:08x} 0x{:08x} 0x{:02x} 0x{:02x} {}".format(os.path.basename(filename), l, seq, x1, x2, x3, binascii.hexlify(raw[12:32])))
 
 sys.exit(0)
 
