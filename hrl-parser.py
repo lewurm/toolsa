@@ -1,6 +1,7 @@
 #!/usr/bin/python2.7
 # coding=utf-8
 
+import os
 import sys
 import struct
 from binascii import hexlify
@@ -17,22 +18,6 @@ file_length = len(data)
 
 def mk_date (int_ts):
     return str(datetime.utcfromtimestamp(int_ts).strftime('%Y-%m-%d %H:%M:%S')) + " GMT"
-
-
-def matches_timestamp (index):
-    return ord(data[index]) == ts_1 and ord(data[index+1]) == ts_2 # and ord(data[index+2]) == ts_3 and ord(data[index+3]) == ts_4
-
-
-def matches_vin (index):
-    return data[index:index+4] == "5YJ3"
-
-
-def matches_coord (index):
-    return data[index] == 'N' and data [index + 5] == 'E'
-
-
-def matches_coord_long (index):
-    return data[index] == 'N' and data [index + 0x10] == 'E'
 
 
 def matches_87fe(index):
@@ -167,6 +152,11 @@ _record_interpreters = {
     0xbc05: VINRecord(),
 }
 
+# filename is a unix timestamp
+hextimestamp = os.path.basename(filename)[:-4]
+print "[++] %s is 0x%x bytes long" % (hextimestamp + ".HRL", file_length)
+print "[++] Creation date: %s" % mk_date (int(hextimestamp, 16))
+
 
 blocks = [Block(data, offset) for offset in range(
     BLOCK_SIZE, # Skip the first block, it appears to have different format
@@ -203,36 +193,3 @@ for op, fbm in sorted(op_first_bytes.items(), key=lambda t: sum(t[1].values()), 
     if len(fbm) > 15:
         print("  ...")
 
-hextimestamp = filename [filename.rfind("/") + 1 : -4]
-print "[++] %s is 0x%x bytes long" % (hextimestamp + ".HRL", file_length)
-ts = int(hextimestamp, 16)
-
-ts_1 = int (hextimestamp [0:2], 16)
-ts_2 = int (hextimestamp [2:4], 16)
-ts_3 = int (hextimestamp [4:6], 16)
-ts_4 = int (hextimestamp [6:8], 16)
-print "[++] Creation date:      %s" % mk_date (ts)
-
-
-i = 0
-timestamp_counter = 0
-cord_counter = 0
-cord_long_counter = 0
-
-work_in_progress = False
-
-while i < file_length:
-    if i < 200 and matches_vin(i):
-        print "[++] VIN: %s\n" % data[i:i+17]
-    elif matches_timestamp(i):
-        print "date %3d at index 0x%06x: %s" % (timestamp_counter, i, mk_date(to_u32(i)))
-        if to_u16(i - 2) != 0x1d28:
-            print "unexpected prolog, it's: 0x%04x" % to_u16(i - 2)
-        timestamp_counter += 1
-    elif matches_coord(i) and work_in_progress:
-        print "gps at index 0x%06x, N 0x%08x E 0x%08x" % (i, to_u32(i+1), to_u32(i+6))
-        cord_counter += 1
-    elif matches_coord_long(i) and work_in_progress:
-        print "gps LONG at index 0x%06x, N 0x%08x E 0x%08x" % (i, to_u32(i+1), to_u32(i+0x11))
-        cord_long_counter += 1
-    i += 1
