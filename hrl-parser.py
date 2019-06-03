@@ -8,43 +8,16 @@ from binascii import hexlify
 from datetime import datetime
 import zlib
 from abc import ABCMeta, abstractmethod
-
-filename = sys.argv[1]
-with open(filename, "r") as fd:
-    data = fd.read()
-
-file_length = len(data)
-
+import argparse
+import itertools
 
 def mk_date (int_ts):
     return str(datetime.utcfromtimestamp(int_ts).strftime('%Y-%m-%d %H:%M:%S')) + " GMT"
-
-
-def matches_87fe(index):
-    return (index & 1 == 0) and data[index + 1:index + 4] == '\x87\xfe\x00'
-
 
 def warn(msg):
     color_red = '\033[31m'
     reset = '\033[0m'
     print(color_red + msg + reset)
-
-
-def to_u16 (j):
-    b0 = ord(data[j+0]) * 256
-    b1 = ord(data[j+1])
-    return b0 + b1
-
-
-def to_u32 (j):
-    b0 = ord(data[j+0]) * 256 * 256 * 256
-    b1 = ord(data[j+1]) * 256 * 256
-    b2 = ord(data[j+2]) * 256
-    b3 = ord(data[j+3])
-    res = b0 + b1 + b2 + b3
-    # print "to_u32: 0x%x" % (res)
-    return res
-
 
 def printable_ascii(s):
     return ''.join((c if 0x20 <= ord(c) < 0x7f else '·' for c in s))
@@ -145,6 +118,21 @@ class VINRecord(RecordInterpreter):
         else:
             raise RuntimeError("unexpected VIN record type: {:02x} '{}'".format(type, rec.rest[1:]))
 
+def parse_hrl_file(filename):
+    with open(filename, "r") as fd:
+        data = fd.read()
+        file_length = len(data)
+
+    # filename is a unix timestamp
+    hextimestamp = os.path.basename(filename)[:-4]
+    print "[++] %s is 0x%x bytes long" % (hextimestamp + ".HRL", file_length)
+    print "[++] Creation date: %s" % mk_date (int(hextimestamp, 16))
+
+    return [Block(data, offset) for offset in range(
+        BLOCK_SIZE, # Skip the first block, it appears to have different format
+        len(data),
+        BLOCK_SIZE)]
+
 
 _record_interpreters = {
     0x1d28: TimeStampRecord(),
@@ -152,16 +140,14 @@ _record_interpreters = {
     0xbc05: VINRecord(),
 }
 
-# filename is a unix timestamp
-hextimestamp = os.path.basename(filename)[:-4]
-print "[++] %s is 0x%x bytes long" % (hextimestamp + ".HRL", file_length)
-print "[++] Creation date: %s" % mk_date (int(hextimestamp, 16))
+parser = argparse.ArgumentParser(description='Interpret Teslas HRL files.')
+parser.add_argument('files', metavar='files', type=str, nargs='+', help='HRL files')
+args = parser.parse_args()
+files = args.files
+# Sort by filename as the name is a unix timestamp
+files.sort(key=lambda name: os.path.basename(name))
 
-
-blocks = [Block(data, offset) for offset in range(
-    BLOCK_SIZE, # Skip the first block, it appears to have different format
-    len(data),
-    BLOCK_SIZE)]
+blocks = itertools.chain(*[parse_hrl_file(filename) for filename in files])
 
 op_first_bytes = {}
 
