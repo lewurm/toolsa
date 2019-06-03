@@ -97,15 +97,23 @@ class RecordInterpreter(object):
         pass
 
 
-class TimeStampRecord(RecordInterpreter):
+class UnixTimeStampRecord(RecordInterpreter):
+    # maps to Vehicle CAN 0x528
     def to_str(self, rec):
         ts, zero = struct.unpack('>II', rec.rest)
         if zero != 0:
             raise RuntimeError("unexpected non-zero:" + str(zero))
         return mk_date(ts)
 
+class OtherTimeStampRecord(RecordInterpreter):
+    # maps to Vehicle CAN 0x318
+    def to_str(self, rec):
+        yy, mm, ss, hh, dd, mins, unkwn1, unknwn2 = struct.unpack('>BBBBBBBB', rec.rest)
+        return '20{:02d}-{:02d}-{:02d} {:2d}:{:02d}:{:02d}'.format(yy, mm, dd,  hh, mins, ss)
+
 
 class VINRecord(RecordInterpreter):
+    # maps to Vehicle CAN 0x405 and some other bus?
     def to_str(self, rec):
         type = ord(rec.rest[0])
         if type == 0x11:
@@ -134,10 +142,28 @@ def parse_hrl_file(filename):
         BLOCK_SIZE)]
 
 
+class GPSRecord(RecordInterpreter):
+    # maps to Chassis CAN 0x04f
+    def to_str(self, rec):
+        # TODO: not clear about the encoding. maybe it isn't GPS related.
+        lat, lng = struct.unpack('>II', rec.rest)
+        return "{:04x} | {:04x}".format(lat, lng)
+
+
+class TyrePressureRecord(RecordInterpreter):
+    # maps to Chassis CAN 0x31f
+    def to_str(self, rec):
+        t1, t2, t3, t4 = struct.unpack('>HHHH', rec.rest)
+        return "{:2d} / {:2d} / {:2d} / {:2d}".format(t1, t2, t3, t4)
+
+
 _record_interpreters = {
-    0x1d28: TimeStampRecord(),
+    0x1d28: UnixTimeStampRecord(),
     0x3c05: VINRecord(),
     0xbc05: VINRecord(),
+    0xb84f: GPSRecord(),
+    0x3b18: OtherTimeStampRecord(),
+    0xbb1f: TyrePressureRecord(),
 }
 
 parser = argparse.ArgumentParser(description='Interpret Teslas HRL files.')
